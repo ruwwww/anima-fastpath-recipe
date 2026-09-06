@@ -1,0 +1,338 @@
+{
+  "10": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "anima-base-v1.0.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "11": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion"
+    }
+  },
+  "12": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    }
+  },
+  "13": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    }
+  },
+  "14": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "1girl, solo, cynthia_\\(pokemon\\), shirona_\\(pokemon\\), pokemon_\\(series\\), @ratatatat74, masterpiece, best quality, very aesthetic, absurdres, newest, close-up, upper body, bust portrait, hand near collar, seductive smile, very long blonde hair, hair over one eye, black teardrop hair ornament, grey eyes, sultry smirk, parted lips, sweat drops, glistening skin, unzipped black coat, fur trim, tight black latex top, cleavage, bare collarbone, shiny clothes, shiny black latex, ultra glossy vinyl, high-gloss reflective material, specular highlights, simple background, black background, dramatic rim lighting, edge light, clean studio lighting, sharp lineart, vibrant colors, depth of field",
+      "clip": [
+        "11",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "lowres, worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, username, blurry, jpeg artifacts, artist name, mutated, disfigured, text, ugly, bad proportions, bad eyes, poorly drawn hands, matte, dull fabric, full body, lower body, legs, feet, blown out lighting, oversaturated lighting, flat lighting, nsfw, nude, nipples, pussy, uncensored, lowres, worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, username, blurry, jpeg artifacts, artist name, mutated, disfigured, text, ugly, bad proportions, bad eyes, poorly drawn hands",
+      "clip": [
+        "11",
+        0
+      ]
+    }
+  },
+  "18": {
+    "class_type": "TorchCompileModelAdvanced",
+    "inputs": {
+      "model": [
+        "10",
+        0
+      ],
+      "backend": "inductor",
+      "fullgraph": false,
+      "mode": "default",
+      "dynamic": "auto",
+      "compile_transformer_blocks_only": true,
+      "dynamo_cache_size_limit": 64,
+      "debug_compile_keys": false
+    }
+  },
+  "16": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "18",
+        0
+      ],
+      "positive": [
+        "14",
+        0
+      ],
+      "negative": [
+        "15",
+        0
+      ],
+      "latent_image": [
+        "13",
+        0
+      ],
+      "seed": 16500250854246242410,
+      "steps": 30,
+      "cfg": 4.0,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "17": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "12",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "z_image_turbo_nvfp4.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "21": {
+    "class_type": "ModelSamplingAuraFlow",
+    "inputs": {
+      "model": [
+        "20",
+        0
+      ],
+      "shift": 3.0
+    }
+  },
+  "48": {
+    "class_type": "TorchCompileModelAdvanced",
+    "inputs": {
+      "model": [
+        "21",
+        0
+      ],
+      "backend": "inductor",
+      "fullgraph": false,
+      "mode": "default",
+      "dynamic": "false",
+      "compile_transformer_blocks_only": true,
+      "dynamo_cache_size_limit": 64,
+      "debug_compile_keys": false,
+      "disable_dynamic_vram": true
+    }
+  },
+  "22": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_3_4b_fp4_mixed.safetensors",
+      "type": "lumina2"
+    }
+  },
+  "23": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
+  "24": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    }
+  },
+  "25": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "1girl, solo, cynthia_\\(pokemon\\), shirona_\\(pokemon\\), pokemon_\\(series\\), @ratatatat74, masterpiece, best quality, very aesthetic, absurdres, newest, close-up, upper body, bust portrait, hand near collar, seductive smile, very long blonde hair, hair over one eye, black teardrop hair ornament, grey eyes, sultry smirk, parted lips, sweat drops, glistening skin, unzipped black coat, fur trim, tight black latex top, cleavage, bare collarbone, shiny clothes, shiny black latex, ultra glossy vinyl, high-gloss reflective material, specular highlights, simple background, black background, dramatic rim lighting, edge light, clean studio lighting, sharp lineart, vibrant colors, depth of field",
+      "clip": [
+        "22",
+        0
+      ]
+    }
+  },
+  "26": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "25",
+        0
+      ]
+    }
+  },
+  "27": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "48",
+        0
+      ],
+      "positive": [
+        "25",
+        0
+      ],
+      "negative": [
+        "26",
+        0
+      ],
+      "latent_image": [
+        "24",
+        0
+      ],
+      "seed": 16500250854246242410,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "res_multistep",
+      "scheduler": "simple",
+      "denoise": 1.0
+    }
+  },
+  "28": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "27",
+        0
+      ],
+      "vae": [
+        "23",
+        0
+      ]
+    }
+  },
+  "30": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "waiIllustriousSDXL_v170.safetensors"
+    }
+  },
+  "58": {
+    "class_type": "TorchCompileModelAdvanced",
+    "inputs": {
+      "model": [
+        "30",
+        0
+      ],
+      "backend": "inductor",
+      "fullgraph": false,
+      "mode": "default",
+      "dynamic": "auto",
+      "compile_transformer_blocks_only": true,
+      "dynamo_cache_size_limit": 64,
+      "debug_compile_keys": false
+    }
+  },
+  "31": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 832,
+      "height": 1216,
+      "batch_size": 1
+    }
+  },
+  "32": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "1girl, solo, cynthia_\\(pokemon\\), shirona_\\(pokemon\\), pokemon_\\(series\\), @ratatatat74, masterpiece, best quality, very aesthetic, absurdres, newest, close-up, upper body, bust portrait, hand near collar, seductive smile, very long blonde hair, hair over one eye, black teardrop hair ornament, grey eyes, sultry smirk, parted lips, sweat drops, glistening skin, unzipped black coat, fur trim, tight black latex top, cleavage, bare collarbone, shiny clothes, shiny black latex, ultra glossy vinyl, high-gloss reflective material, specular highlights, simple background, black background, dramatic rim lighting, edge light, clean studio lighting, sharp lineart, vibrant colors, depth of field",
+      "clip": [
+        "30",
+        1
+      ]
+    }
+  },
+  "33": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "lowres, worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, username, blurry, jpeg artifacts, artist name, mutated, disfigured, text, ugly, bad proportions, bad eyes, poorly drawn hands, matte, dull fabric, full body, lower body, legs, feet, blown out lighting, oversaturated lighting, flat lighting, nsfw, nude, nipples, pussy, uncensored, lowres, worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, username, blurry, jpeg artifacts, artist name, mutated, disfigured, text, ugly, bad proportions, bad eyes, poorly drawn hands",
+      "clip": [
+        "30",
+        1
+      ]
+    }
+  },
+  "34": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "58",
+        0
+      ],
+      "positive": [
+        "32",
+        0
+      ],
+      "negative": [
+        "33",
+        0
+      ],
+      "latent_image": [
+        "31",
+        0
+      ],
+      "seed": 16500250854246242410,
+      "steps": 25,
+      "cfg": 6.0,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "karras",
+      "denoise": 1.0
+    }
+  },
+  "35": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "34",
+        0
+      ],
+      "vae": [
+        "30",
+        2
+      ]
+    }
+  },
+  "40": {
+    "class_type": "easy imageIndexSwitch",
+    "inputs": {
+      "index": 0,
+      "image0": [
+        "17",
+        0
+      ],
+      "image1": [
+        "28",
+        0
+      ],
+      "image2": [
+        "35",
+        0
+      ]
+    }
+  },
+  "41": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "hermes_anima",
+      "images": [
+        "40",
+        0
+      ]
+    }
+  }
+}
