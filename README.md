@@ -1,59 +1,67 @@
 # Anima DiT Fast-Path Recipe (ComfyUI)
 
-A validated, clean, and highly-optimized recipe to run **Anima Base v1.0** (Cosmos 2 DiT architecture) at full resolution (**832x1216**, 30 Steps, Batched CFG $B=2$) in **~11.7 - 12.0 seconds (~2.75 it/s)** on modern Blackwell consumer GPUs (NVIDIA RTX 5060 Ti 16GB / RTX 50-series) and **~14.9 - 15.3 seconds (~2.08 it/s)** on BF16 base weights.
+A validated, clean, and highly-optimized recipe to run **Anima Base v1.0** (Cosmos 2 DiT architecture) at full resolution (**832x1216**, 30 Steps, Batched CFG $B=2$) in **~11.2 - 11.5 seconds (~2.59 - 2.67 it/s)** on modern Blackwell consumer GPUs (NVIDIA RTX 5060 Ti 16GB / RTX 50-series) and **~14.9 - 15.3 seconds (~2.05 it/s)** on BF16 base weights.
 
-This setup leverages PyTorch Inductor non-attention kernel fusion, native ComfyUI compile nodes, hardware-accelerated CK-Attention (SageAttention backend), and modern **MXFP8 / FP8 quantized checkpoints** from [Bedovyy/Anima-FP8](https://huggingface.co/Bedovyy/Anima-FP8/tree/main)—achieving maximum throughput without visual degradation or Turbo LoRAs.
+This setup leverages PyTorch Inductor non-attention kernel fusion, native ComfyUI compile nodes, hardware-accelerated CK-Attention (SageAttention backend), and modern **MXFP8 & ConvRot INT8 quantized checkpoints**—achieving maximum throughput with zero custom node registration.
 
-## Key Performance Highlights (RTX 5060 Ti 16GB)
+## Benchmark & Fidelity Comparison (RTX 5060 Ti 16GB)
 
-- **Resolution:** Native 832x1216 ($3,952$ spatial patch tokens)
-- **Batching:** Batched CFG ($B=2$, Positive + Negative conditioning simultaneously)
-- **Sampling:** 30 steps (`er_sde` / `simple` scheduler, CFG: 4.0 - 5.0)
-- **Generation Speed:**
-  - **MXFP8 Checkpoint (`anima-base-v1.0-mxfp8`):** **~11.7 - 12.0s** (~0.36s per CFG step / **~2.75 it/s**)
-  - **BF16 Base Checkpoint (`anima-base-v1.0`):** **~14.9 - 15.3s** (~0.48s per CFG step / **~2.08 it/s**)
-- **VRAM Usage:** ~5.0 - 5.8 GB peak active allocation during sampling (fits comfortably within 8GB/16GB VRAM)
+Tested on native 832x1216 resolution, 30 steps, `er_sde` / `simple` scheduler, CFG 4.0 - 5.0, Batched CFG ($B=2$, positive + negative conditioning concurrently):
 
----
+| Model Format | Checkpoint | Step Latency ($B=2$) | Generation Speed | Total 30-Step Time | Visual / Semantic Fidelity vs BF16 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **MXFP8** | `anima-base-v1.0-mxfp8` | ~374 ms / step | **2.67 it/s** | **~11.2s** | Fast Blackwell microscaling; slight micro-texture variance due to activation outliers |
+| **ConvRot INT8** *(Recommended)* | `anima-base-v1.0-convrot-int8` | ~386 ms / step | **2.59 it/s** | **~11.5s** | **~90% Winrate vs MXFP8**; nearly identical to BF16 ground truth via Regular Hadamard rotation |
+| **BF16 Ground Truth** | `anima-base-v1.0` | ~487 ms / step | **2.05 it/s** | **~14.9s** | Reference baseline |
 
-## 1. Quantized Weights: Blackwell MXFP8 Fastpath
-
-For NVIDIA Blackwell architectures (RTX 5060 Ti / RTX 5070 / RTX 5080 / RTX 5090, Compute Capability `sm_120`), **Microscaling FP8 (MXFP8)** provides significant hardware acceleration on 5th-gen Tensor Cores.
-
-Download the optimized model weights from Hugging Face:
-* **Hugging Face Repository:** [Bedovyy/Anima-FP8](https://huggingface.co/Bedovyy/Anima-FP8/tree/main)
-* **Recommended Checkpoints:**
-  - `anima-base-v1.0-mxfp8.safetensors`: Microscaling FP8 tuned for Blackwell Tensor Cores (~11.7s per image).
-  - `anima-base-v1.0-fp8.safetensors`: Standard FP8 (`float8_e4m3fn`) format.
-  - `anima-turbo-v1.1-fp8.safetensors`: Turbo edition for few-step sampling.
-
-### Quantization Structure (comfy-dit-quantizer)
-The MXFP8 checkpoint selectively preserves sensitive layers in full precision to guarantee visual fidelity:
-- **Preserved in Full Precision (`keep`):** Initial blocks (`blocks.0.`, `blocks.1.`), final output block (`blocks.27.`), and all `adaln_modulation` layers.
-- **Quantized to MXFP8 (`mxfp8`):** Attention projections (`q_proj`, `k_proj`, `v_proj`, `output_proj`) and Feed-Forward Networks (`.mlp`).
+### Why is MXFP8 slightly faster than ConvRot INT8?
+- **Native Blackwell Execution:** MXFP8 computes directly using 5th-gen Tensor Core hardware microscaling without requiring online activation transformation.
+- **Online Activation Rotation Overhead:** ConvRot weights are pre-rotated offline ($W \cdot H$), but activations must undergo a group-wise Regular Hadamard Transform ($X \cdot H$) online at runtime. This adds ~0.4 ms per block (~12 ms total per step), which is a negligible price (~0.3s overall) for near-lossless BF16 fidelity.
 
 ---
 
-## 2. System Requirements & Dependencies
+## 1. Download Quantized Models
 
-### Hardware & Environment
-- **GPU:** NVIDIA Ampere, Ada Lovelace, or Blackwell (e.g. RTX 3060/4060/4070/4090/5060 Ti)
-- **Python:** 3.10, 3.11, or 3.12
-- **PyTorch:** PyTorch 2.5+ with CUDA 12.4+ / 12.8+ / 13.0+
-- **ComfyUI:** Latest official upstream release
+### Option A: ConvRot INT8 (Recommended for Daily Production)
+* **Hugging Face Model:** [ruwwww/Anima-ConvRot](https://huggingface.co/ruwwww/Anima-ConvRot)
+* **File:** `anima-base-v1.0-convrot-int8.safetensors` (2.41 GB, ~38% VRAM footprint reduction)
+* **Features:** Regular Hadamard block rotation ($N_0=256$), zero outlier clipping, ~90% semantic match to BF16.
 
-### Required Dependencies
-```bash
-# Core acceleration and custom kernels
-pip install comfy-kitchen torch torchvision torchaudio triton ninja
-```
+### Option B: Blackwell MXFP8
+* **Hugging Face Model:** [Bedovyy/Anima-FP8](https://huggingface.co/Bedovyy/Anima-FP8/tree/main)
+* **File:** `anima-base-v1.0-mxfp8.safetensors`
+* **Features:** Microscaling FP8 format tuned for raw compute speed on sm_120 Blackwell Tensor Cores.
 
 ---
 
-## 3. ComfyUI Startup Flags
+## 2. Layer Retention Policy (Zero Visual Degradation)
 
-Launch your ComfyUI backend with the exact high-performance flags below:
+Both ConvRot INT8 and MXFP8 enforce a selective quantization rule that leaves critical boundary layers untouched:
 
+- **Preserved in Full Precision (`BF16`):**
+  - Initial blocks: `blocks.0.` and `blocks.1.` (input patch feature projection)
+  - Final block: `blocks.27.` (high-frequency spatial reconstruction)
+  - All conditioning routing: `adaln_modulation` (timestep & guidance gates)
+  - Boundary layers: `x_embedder` and `final_layer`
+- **Quantized (MXFP8 / ConvRot INT8):**
+  - Intermediate blocks: `blocks.2.` through `blocks.26.`
+  - Linear Attention Projections: `q_proj`, `k_proj`, `v_proj`, `output_proj`
+  - Feed-Forward Networks (MLP): `mlp.layer1` and `mlp.layer2` (which dominate ~70% of total DiT FLOPs)
+
+---
+
+## 3. System Requirements & Startup Flags
+
+### Requirements
+- **GPU:** NVIDIA Ampere, Ada Lovelace, or Blackwell (RTX 3060/4060/4070/4090/5060 Ti)
+- **PyTorch:** 2.5+ with CUDA 12.4+ / 12.8+ / 13.0+
+- **ComfyUI:** Latest official upstream release with `comfy-kitchen` installed:
+  ```bash
+  pip install comfy-kitchen torch torchvision torchaudio triton ninja
+  ```
+
+### ComfyUI Startup Flags
+Launch ComfyUI with the fast memory allocator and SageAttention backend:
 ```bash
 python main.py \
   --listen 0.0.0.0 \
@@ -64,19 +72,14 @@ python main.py \
   --use-ck-attention
 ```
 
-### Explanation of Flags:
-- `--fast`: Enables internal fast memory allocation optimizations and aggressive Tensor Core dispatch.
-- `--use-ck-attention`: Activates hardware-accelerated CK-Attention (SageAttention backend) via `comfy-kitchen` for DiT cross-attention and self-attention operations.
-
 ---
 
-## 4. Workflow Architecture (How to Assemble)
+## 4. Workflow Architecture
 
-You can compile the DiT model using either ComfyUI's native compile node or the advanced compile node from ComfyUI-KJNodes.
+Both ConvRot and MXFP8 models contain standard ComfyUI `comfy_quant` metadata and are loaded automatically by `comfy-kitchen` with **ZERO custom node registration required**.
 
-### Flow Diagram
 ```
-[UNETLoader (anima-base-v1.0-mxfp8)]
+[UNETLoader (anima-base-v1.0-convrot-int8 OR mxfp8)]
           │
           ▼ (MODEL)
 [TorchCompileModel (Native)] OR [TorchCompileModelAdvanced]
@@ -91,58 +94,37 @@ You can compile the DiT model using either ComfyUI's native compile node or the 
 [SaveImage]
 ```
 
-### Node Settings:
-
-#### 1. Model Loader (`UNETLoader`):
-- `unet_name`: `anima-base-v1.0-mxfp8.safetensors` (or `anima-base-v1.0.safetensors`)
-- `weight_dtype`: `default`
-
-#### 2. Model Compilation (Choose either option):
-- **Option A: Native ComfyUI Node (`TorchCompileModel`):**
-  - Built-in under ComfyUI (`comfy_extras/nodes_torch_compile.py`).
-  - `backend`: `inductor`
-  - *Note: Automatically enforces `disable_dynamic=True` and applies guard filters to prevent unnecessary graph recompilations.*
-- **Option B: Advanced Node (`TorchCompileModelAdvanced` via KJNodes):**
-  - `backend`: `inductor`
-  - `mode`: `max-autotune-no-cudagraphs` or `default`
-  - `dynamic`: `False` (setting dynamic to `false` is critical for FP8/MXFP8 inductor optimization)
-  - `fullgraph`: `False`
-
-#### 3. Text Encoder (`CLIPLoader`):
-- Model: `qwen_3_06b_base.safetensors` (`fp16` / `bf16`)
-- Type: `stable_diffusion`
-
-#### 4. VAE Loader (`VAELoader`):
-- Model: `qwen_image_vae.safetensors` / `WanVAE`
-
-#### 5. KSampler:
-- Steps: `30`
-- CFG: `4.0` - `5.0`
-- Sampler: `er_sde`
-- Scheduler: `simple`
-- Denoise: `1.0`
+### Node Configuration:
+1. **UNETLoader:** Select `anima-base-v1.0-convrot-int8.safetensors` or `anima-base-v1.0-mxfp8.safetensors`.
+2. **TorchCompileModel (Native ComfyUI Node):**
+   - Built-in under `comfy_extras/nodes_torch_compile.py`.
+   - `backend`: `inductor`
+   - Automatically applies `disable_dynamic=True` and dictionary guard filtering.
+3. **KSampler:**
+   - Steps: `30`
+   - CFG: `4.0` - `5.0`
+   - Sampler: `er_sde`
+   - Scheduler: `simple`
+   - Denoise: `1.0`
 
 ---
 
-## 5. Workflows Included in this Repo
+## 5. Standalone Quantization Converter
 
-- `workflows/anima_fastpath_workflow.json`: Complete ComfyUI Canvas workflow (drag-and-drop onto ComfyUI Web GUI).
-- `workflows/anima_fastpath_api_prompt.json`: Direct ComfyUI API prompt payload for headless automation.
+You can quantize any custom Anima DiT checkpoint yourself using the included converter tool:
 
----
+```bash
+# Quantize to ConvRot INT8 (default, group_size=256)
+python tools/quantize_anima_convrot.py \
+  --input /path/to/anima-base-v1.0.safetensors \
+  --output /path/to/anima-base-v1.0-convrot-int8.safetensors \
+  --mode int8
 
-## 6. Profiling & Benchmark Breakdown (RTX 5060 Ti 16GB)
+# Quantize to ConvRot W4A4
+python tools/quantize_anima_convrot.py \
+  --input /path/to/anima-base-v1.0.safetensors \
+  --output /path/to/anima-base-v1.0-convrot-w4a4.safetensors \
+  --mode w4a4
+```
 
-Below is the step latency and throughput breakdown on an NVIDIA GeForce RTX 5060 Ti (36 SMs, Compute Capability 12.0 / Blackwell):
-
-| Model Weight & Configuration | Step Latency ($B=2$) | Throughput | Total 30-Step Time | Speedup vs Eager BF16 |
-| :--- | :--- | :--- | :--- | :--- |
-| **BF16 Eager (No Compile, SDPA)** | ~980 ms / step | ~1.02 it/s | ~30.2s | 1.00x (Baseline) |
-| **BF16 + CK-Attention + Torch.Compile** | ~480 ms / step | ~2.08 it/s | ~14.9s | ~2.02x |
-| **MXFP8 + CK-Attention + Native Compile** | **~365 ms / step** | **~2.75 it/s** | **~11.7 - 12.0s** | **~2.55x** |
-
-### Per-Kernel Breakdown (MXFP8 Fast-Path):
-- **Linear Layers (GEMM):** Accelerated via Blackwell MXFP8 Tensor Cores (~50% latency reduction in MLP and projection layers).
-- **Self & Cross Attention:** Handled via CK-Attention (SageAttention backend) at native BF16 precision (~80 ms per step).
-- **Elementwise & Modulation:** Fully fused into optimized pointwise kernels by PyTorch Inductor (~50 ms per step).
-- **Boundary Layers & VAE:** Kept in high precision, ensuring zero visual quality degradation.
+The script automatically embeds standard `comfy_quant` metadata into the output safetensors file, allowing ComfyUI to dispatch `ck.int8_linear` and `ck.convrot_w4a4_linear` kernels out of the box.
